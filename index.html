@@ -7,13 +7,13 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="調査士カメラ">
     
-    <title>調査士用 現場写真ツール(Proto-V4)</title>
+    <title>調査士用 現場写真ツール(Proto-V5)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f5f5f7;
             margin: 0;
-            padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0; /* ノッチ対応 */
+            padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
             color: #333;
             height: 100vh;
             display: flex;
@@ -73,6 +73,14 @@
 
         .form-group { margin-bottom: 5px; }
         
+        .flex-row {
+            display: flex;
+            gap: 10px;
+        }
+        .flex-row > div {
+            flex: 1;
+        }
+
         label {
             display: inline-block;
             font-weight: bold;
@@ -80,7 +88,7 @@
             font-size: 0.8rem;
         }
         
-        input[type="text"], select {
+        input[type="text"], input[type="number"], select {
             width: 100%;
             padding: 8px;
             border: 1px solid #ccc;
@@ -151,7 +159,6 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        /* aタグからbuttonに変更 */
         #downloadBtn {
             width: 100%;
             margin-top: 10px;
@@ -163,7 +170,7 @@
 </head>
 <body>
 
-<h1>調査士カメラ(Proto-V4)</h1>
+<h1>調査士カメラ(Proto-V5)</h1>
 
 <button class="btn" id="btnPermission" style="background:#5856d6; margin: 10px; position: fixed; top: 0; left: 0; z-index: 999; width: auto; display:none;">方位センサーを許可</button>
 
@@ -179,9 +186,15 @@
             </div>
         </div>
 
-        <div class="form-group">
-            <label for="pointName">点名</label>
-            <input type="text" id="pointName" placeholder="T.1, K-1">
+        <div class="form-group flex-row">
+            <div style="flex: 2;">
+                <label for="pointName">点名</label>
+                <input type="text" id="pointName" placeholder="T.1, K-1">
+            </div>
+            <div style="flex: 1;">
+                <label for="photoNumber">番号</label>
+                <input type="number" id="photoNumber" value="1" min="1">
+            </div>
         </div>
 
         <div class="form-group">
@@ -211,13 +224,14 @@
     let latitude = "測位中";
     let longitude = "測位中";
     let heading = "取得中";
-    let currentCanvas = null; // 生成したCanvasを保持する変数
+    let currentCanvas = null;
 
     const geoStatus = document.getElementById('geoStatus');
     const markerType = document.getElementById('markerType');
     const markerTypeCustom = document.getElementById('markerTypeCustom');
     const btnPermission = document.getElementById('btnPermission');
     const downloadBtn = document.getElementById('downloadBtn');
+    const photoNumberInput = document.getElementById('photoNumber');
 
     markerType.addEventListener('change', () => {
         markerTypeCustom.style.display = markerType.value === 'その他' ? 'block' : 'none';
@@ -295,7 +309,7 @@
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                currentCanvas = canvas; // 保存用にセット
+                currentCanvas = canvas;
 
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -342,13 +356,15 @@
         reader.readAsDataURL(file);
     });
 
-    // iPhoneの共有機能（Web Share API）を使ってカメラロールに直接保存させる
+    // 保存ボタンの処理
     downloadBtn.addEventListener('click', async () => {
         if (!currentCanvas) return;
 
         const pName = document.getElementById('pointName').value || '未入力';
-        const mType = markerType.value === 'その他' ? markerTypeCustom.value : markerType.value;
-        const fileName = `${pName}_${mType}.jpg`;
+        const pNum = photoNumberInput.value || '1';
+        
+        // ファイル名を「点名_番号.jpg」に設定（例：K1_1.jpg）
+        const fileName = `${pName}_${pNum}.jpg`;
 
         currentCanvas.toBlob(async (blob) => {
             const file = new File([blob], fileName, { type: 'image/jpeg' });
@@ -359,11 +375,14 @@
                         files: [file],
                         title: fileName
                     });
+                    
+                    // シェア（保存）が成功したとみなして、自動で番号を1つ増やす
+                    photoNumberInput.value = parseInt(pNum) + 1;
+                    
                 } catch (error) {
                     console.log('シェアをキャンセル、またはエラー', error);
                 }
             } else {
-                // PCやShare API非対応ブラウザ用フォールバック
                 const link = document.createElement('a');
                 link.download = fileName;
                 link.href = URL.createObjectURL(blob);
