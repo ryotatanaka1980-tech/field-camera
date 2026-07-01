@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="調査士カメラ">
     
-    <title>調査士用 現場写真ツール(Proto-V7)</title>
+    <title>調査士用 現場写真ツール(Proto-V9)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -104,6 +104,7 @@
             display: flex;
             align-items: center;
             gap: 3px;
+            font-size: 0.85rem;
         }
 
         .sima-box {
@@ -184,7 +185,7 @@
 </head>
 <body>
 
-<h1>調査士カメラ(Proto-V7)</h1>
+<h1>調査士カメラ(Proto-V9)</h1>
 
 <button class="btn" id="btnPermission" style="background:#5856d6; margin: 10px; position: fixed; top: 0; left: 0; z-index: 999; width: auto; display:none;">方位センサーを許可</button>
 
@@ -193,8 +194,25 @@
         <div class="form-group status" id="geoStatus">GPS/方位: 測位中...</div>
 
         <div class="sima-box">
-            <label>📂 SIMAデータ読込 (点名リスト化)</label>
-            <input type="file" id="simaInput" style="font-size: 0.8rem; padding: 4px; background: #fff; width: 100%; box-sizing: border-box;">
+            <label style="margin-bottom: 5px;">📂 SIMA読込 (エラー時はコピペで)</label>
+            
+            <div class="radio-group" style="margin-bottom: 5px;">
+                <label><input type="radio" name="simaMethod" value="file" checked> ファイル</label>
+                <label><input type="radio" name="simaMethod" value="paste"> コピペ</label>
+            </div>
+
+            <div id="simaFileArea">
+                <input type="file" id="simaInput" style="font-size: 0.8rem; padding: 4px; background: #fff; width: 100%; box-sizing: border-box;">
+            </div>
+
+            <div id="simaPasteArea" style="display:none;">
+                <textarea id="simaTextarea" rows="4" placeholder="SIMAのテキストをここにペースト" style="width:100%; border:1px solid #ccc; border-radius:4px; font-size:0.8rem; padding:4px; box-sizing:border-box;"></textarea>
+                <div style="display:flex; gap:5px; margin-top:5px;">
+                    <button type="button" class="btn" id="parseSimaBtn" style="flex:2; height: 30px; font-size: 0.8rem; padding: 4px; background: #5856d6;">抽出する</button>
+                    <button type="button" class="btn" id="clearSimaBtn" style="flex:1; height: 30px; font-size: 0.8rem; padding: 4px; background: #8e8e93;">クリア</button>
+                </div>
+            </div>
+
             <div class="sima-status" id="simaStatus">未読み込み</div>
         </div>
 
@@ -254,7 +272,46 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const photoNumberInput = document.getElementById('photoNumber');
     
-    // --- SIMAデータ読み込み処理 ---
+    // --- SIMAデータ UI切り替え処理 ---
+    document.querySelectorAll('input[name="simaMethod"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            if (e.target.value === 'file') {
+                document.getElementById('simaFileArea').style.display = 'block';
+                document.getElementById('simaPasteArea').style.display = 'none';
+            } else {
+                document.getElementById('simaFileArea').style.display = 'none';
+                document.getElementById('simaPasteArea').style.display = 'block';
+            }
+        });
+    });
+
+    // --- SIMAデータ 解析共通関数 ---
+    function parseSimaText(text) {
+        const lines = text.split(/\r?\n/);
+        const dataList = document.getElementById('pointNameList');
+        
+        dataList.innerHTML = ''; // リストをリセット
+        let count = 0;
+
+        lines.forEach(line => {
+            const cols = line.split(',');
+            // A01から始まる行（座標データ）を抽出
+            if (cols[0] === 'A01' && cols.length > 1) {
+                const pName = cols[1].trim(); 
+                if (pName) {
+                    const option = document.createElement('option');
+                    option.value = pName;
+                    dataList.appendChild(option);
+                    count++;
+                }
+            }
+        });
+
+        const simaStatus = document.getElementById('simaStatus');
+        simaStatus.innerText = `✅ 読込完了: ${count}点の点名をリスト化しました`;
+    }
+
+    // --- ① ファイルから読み込む場合 ---
     document.getElementById('simaInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -263,31 +320,29 @@
         reader.readAsText(file, 'Shift_JIS');
         
         reader.onload = function(event) {
-            const text = event.target.result;
-            const lines = text.split(/\r?\n/);
-            const dataList = document.getElementById('pointNameList');
-            
-            dataList.innerHTML = '';
-            let count = 0;
-
-            lines.forEach(line => {
-                const cols = line.split(',');
-                if (cols[0] === 'A01' && cols.length > 1) {
-                    const pName = cols[1].trim(); 
-                    if (pName) {
-                        const option = document.createElement('option');
-                        option.value = pName;
-                        dataList.appendChild(option);
-                        count++;
-                    }
-                }
-            });
-
-            const simaStatus = document.getElementById('simaStatus');
-            simaStatus.innerText = `✅ 読込完了: ${count}点の点名を追加しました`;
+            parseSimaText(event.target.result);
         };
     });
 
+    // --- ② コピペから読み込む場合 ---
+    document.getElementById('parseSimaBtn').addEventListener('click', () => {
+        const text = document.getElementById('simaTextarea').value;
+        if (!text) {
+            alert('テキストが入力されていません。ペーストしてください。');
+            return;
+        }
+        parseSimaText(text);
+    });
+
+    // クリアボタン
+    document.getElementById('clearSimaBtn').addEventListener('click', () => {
+        document.getElementById('simaTextarea').value = '';
+        document.getElementById('pointNameList').innerHTML = '';
+        document.getElementById('simaStatus').innerText = '未読み込み';
+    });
+
+
+    // その他が選ばれたときの処理
     markerType.addEventListener('change', () => {
         markerTypeCustom.style.display = markerType.value === 'その他' ? 'block' : 'none';
     });
