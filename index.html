@@ -1,171 +1,47 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="調査士カメラ">
-    
-    <title>調査士用 現場写真ツール(Proto-V13)</title>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f7; margin: 0; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0; color: #333; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-        h1 { font-size: 1rem; text-align: center; margin: 5px 0; color: #007aff; flex-shrink: 0; }
-        .main-content { display: flex; flex-direction: column; flex: 1; overflow: hidden; width: 100%; }
-        .settings-panel { background: #fff; padding: 10px; border-radius: 8px; margin: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow-y: auto; display: flex; flex-direction: column; gap: 5px; }
-        @media (orientation: landscape) and (max-height: 600px) {
-            .main-content { flex-direction: row; }
-            .settings-panel { width: 40%; margin: 0 0 0 10px; border-radius: 8px 0 0 8px; box-shadow: none; height: 100%; box-sizing: border-box; flex-shrink: 0; }
-            .preview-panel { width: 60%; height: 100%; margin: 0; border-radius: 0 8px 8px 0; flex-grow: 1; }
-        }
-        .form-group { margin-bottom: 5px; }
-        label { display: inline-block; font-weight: bold; margin-bottom: 2px; font-size: 0.8rem; }
-        input[type="text"], input[type="number"], select, textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 0.9rem; height: 34px; }
-        textarea { height: 80px; }
-        .btn { display: block; width: 100%; background: #007aff; color: #fff; text-align: center; padding: 8px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: bold; cursor: pointer; height: 38px; }
-        .status { font-size: 0.75rem; color: #666; background: #eee; padding: 4px; border-radius: 4px; }
-        #simaViewer { width: 100%; height: 180px; background: #fff; border: 1px solid #b3d4fc; border-radius: 4px; margin-top: 5px; display: none; touch-action: none; }
-        .preview-panel { flex: 1; padding: 10px; background: #f0f0f0; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow: hidden; }
-        #preview { max-width: 100%; max-height: calc(100% - 50px); border-radius: 4px; object-fit: contain; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-        #downloadBtn { width: 100%; margin-top: 10px; display: none; flex-shrink: 0; background: #34c759; }
-    </style>
-</head>
-<body>
-
-<h1>調査士カメラ(Proto-V13)</h1>
-
-<div class="main-content">
-    <div class="settings-panel">
-        <div class="form-group status" id="geoStatus">GPS/方位: 測位中...</div>
-
-        <div class="sima-box" style="background: #e8f4fd; padding: 8px; border-radius: 6px;">
-            <label>📂 SIMA読込 (テキスト全選択＆コピペ)</label>
-            <textarea id="simaTextarea" placeholder="テキストを全選択してここにペースト"></textarea>
-            <div style="display:flex; gap:5px; margin-top:5px;">
-                <button type="button" class="btn" id="parseSimaBtn" style="flex:2; background: #007aff;">抽出・作図</button>
-                <button type="button" class="btn" id="clearSimaBtn" style="flex:1; background: #8e8e93;">クリア</button>
-            </div>
-            <div class="status" id="simaStatus" style="margin-top:5px;">未読み込み</div>
-            <canvas id="simaViewer"></canvas>
-        </div>
-
-        <div class="form-group">
-            <label>点名</label>
-            <select id="pointNameSelect"><option value="">-- ペーストしてください --</option></select>
-            <input type="text" id="pointNameCustom" placeholder="手入力" style="display:none; margin-top:2px;">
-        </div>
-
-        <div class="form-group">
-            <label>境界標</label>
-            <select id="markerType"><option value="コンクリート杭">コンクリート杭</option><option value="金属鋲">金属鋲</option><option value="その他">その他</option></select>
-        </div>
-
-        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
-        <button class="btn" style="background:#5856d6;" onclick="document.getElementById('cameraInput').click()">📷 写真を撮影</button>
-    </div>
-
-    <div class="preview-panel">
-        <img id="preview">
-        <button class="btn" id="downloadBtn">💾 画像を保存</button>
-    </div>
-</div>
-
 <script>
-    let simaPoints = [];
-    let selectedPointName = "";
-    const pointNameSelect = document.getElementById('pointNameSelect');
-    const pointNameCustom = document.getElementById('pointNameCustom');
-
-    function parseSimaText(text) {
-        const lines = text.split(/\r?\n/);
-        pointNameSelect.innerHTML = '<option value="">-- 選択 --</option><option value="直接入力">✎ 直接入力</option>';
-        simaPoints = [];
-        lines.forEach(line => {
-            const cols = line.split(',');
-            if (cols[0] === 'A01' && cols.length >= 5) {
-                let pName = cols[2] ? cols[2].trim() : cols[1].trim();
-                const pX = parseFloat(cols[3]);
-                const pY = parseFloat(cols[4]);
-                if (pName && !isNaN(pX) && !isNaN(pY)) {
-                    simaPoints.push({ name: pName, x: pX, y: pY, cx: 0, cy: 0 });
-                    const option = document.createElement('option');
-                    option.value = pName; option.innerText = pName;
-                    pointNameSelect.appendChild(option);
-                }
-            }
-        });
-        document.getElementById('simaStatus').innerText = `✅ ${simaPoints.length}点の点名抽出完了`;
-        document.getElementById('simaViewer').style.display = 'block';
-        drawSimaMap();
-    }
-
     function drawSimaMap() {
         const canvas = document.getElementById('simaViewer');
         const rect = canvas.getBoundingClientRect();
         canvas.width = rect.width; canvas.height = rect.height;
         const ctx = canvas.getContext('2d');
-        let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
-        simaPoints.forEach(p => { minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); });
-        const scale = Math.min((canvas.width-40)/(maxY-minY||1), (canvas.height-40)/(maxX-minX||1));
-        const offsetX = (canvas.width - (maxY-minY)*scale)/2, offsetY = (canvas.height - (maxX-minX)*scale)/2;
-        ctx.clearRect(0,0,canvas.width,canvas.height);
+        
+        if (simaPoints.length === 0) return;
+
+        // 1. 座標の範囲を求める
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         simaPoints.forEach(p => {
-            p.cx = 20 + offsetX + (p.y-minY)*scale;
-            p.cy = canvas.height - 20 - offsetY - (p.x-minX)*scale;
+            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        });
+
+        // 2. 座標幅を算出（0除算防止）
+        const rangeX = (maxX - minX) || 1;
+        const rangeY = (maxY - minY) || 1;
+
+        // 3. 画面サイズに合わせて「倍率」を計算（余白を考慮）
+        const padding = 40;
+        const scaleX = (canvas.width - padding * 2) / rangeX;
+        const scaleY = (canvas.height - padding * 2) / rangeY;
+        const scale = Math.min(scaleX, scaleY) * 0.9; // 0.9倍して少し余白を作る
+
+        // 4. 中心に配置するためのオフセット計算
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const canvasCenterX = canvas.width / 2;
+        const canvasCenterY = canvas.height / 2;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        simaPoints.forEach(p => {
+            // 座標変換：中心合わせ＆スケール適用
+            p.cx = canvasCenterX + (p.y - centerY) * scale;
+            p.cy = canvasCenterY - (p.x - centerX) * scale; // Y軸反転（測量座標系→画面）
+
             const isSel = (p.name === selectedPointName);
-            ctx.beginPath(); ctx.arc(p.cx, p.cy, isSel?8:4, 0, Math.PI*2);
-            ctx.fillStyle = isSel ? '#ff3b30' : '#007aff'; ctx.fill();
+            ctx.beginPath();
+            ctx.arc(p.cx, p.cy, isSel ? 10 : 6, 0, Math.PI * 2);
+            ctx.fillStyle = isSel ? '#ff3b30' : '#007aff';
+            ctx.fill();
         });
     }
-
-    document.getElementById('parseSimaBtn').addEventListener('click', () => parseSimaText(document.getElementById('simaTextarea').value));
-    document.getElementById('simaViewer').addEventListener('click', e => {
-        const rect = document.getElementById('simaViewer').getBoundingClientRect();
-        const tapX = e.clientX - rect.left, tapY = e.clientY - rect.top;
-        simaPoints.forEach(p => {
-            if (Math.hypot(p.cx - tapX, p.cy - tapY) < 20) {
-                selectedPointName = p.name; pointNameSelect.value = p.name;
-                drawSimaMap();
-            }
-        });
-    });
-
-    // その他機能はV11を継承
-    // ...撮影・保存処理...
-    document.getElementById('cameraInput').addEventListener('change', function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = img.width; canvas.height = img.height;
-                ctx.drawImage(img, 0, 0);
-                const baseSize = Math.max(canvas.width, canvas.height) * 0.025;
-                ctx.font = `bold ${baseSize}px sans-serif`;
-                let pName = (pointNameSelect.value === '直接入力') ? pointNameCustom.value : pointNameSelect.value;
-                ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(20, canvas.height - 150, 600, 120);
-                ctx.fillStyle = '#fff'; ctx.fillText(`点名: ${pName}`, 40, canvas.height - 110);
-                document.getElementById('preview').src = canvas.toDataURL('image/jpeg');
-                document.getElementById('preview').style.display = 'block';
-                document.getElementById('downloadBtn').style.display = 'block';
-                currentCanvas = canvas;
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-
-    document.getElementById('downloadBtn').addEventListener('click', async () => {
-        const pName = (pointNameSelect.value === '直接入力') ? pointNameCustom.value : pointNameSelect.value;
-        const fileName = `${pName || '未入力'}.jpg`;
-        currentCanvas.toBlob(async (blob) => {
-            const file = new File([blob], fileName, { type: 'image/jpeg' });
-            if (navigator.canShare) { await navigator.share({ files: [file] }); }
-        }, 'image/jpeg', 0.9);
-    });
 </script>
-</body>
-</html>
