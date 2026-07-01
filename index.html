@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="調査士カメラ">
     
-    <title>調査士用 現場写真ツール(Proto-V6)</title>
+    <title>調査士用 現場写真ツール(Proto-V7)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -184,7 +184,7 @@
 </head>
 <body>
 
-<h1>調査士カメラ(Proto-V6)</h1>
+<h1>調査士カメラ(Proto-V7)</h1>
 
 <button class="btn" id="btnPermission" style="background:#5856d6; margin: 10px; position: fixed; top: 0; left: 0; z-index: 999; width: auto; display:none;">方位センサーを許可</button>
 
@@ -194,7 +194,7 @@
 
         <div class="sima-box">
             <label>📂 SIMAデータ読込 (点名リスト化)</label>
-            <input type="file" id="simaInput" accept=".sim,.txt,.csv" style="font-size: 0.8rem; padding: 4px; background: #fff; width: 100%; box-sizing: border-box;">
+            <input type="file" id="simaInput" style="font-size: 0.8rem; padding: 4px; background: #fff; width: 100%; box-sizing: border-box;">
             <div class="sima-status" id="simaStatus">未読み込み</div>
         </div>
 
@@ -260,24 +260,20 @@
         if (!file) return;
 
         const reader = new FileReader();
-        // 日本の測量ソフト標準（Shift_JIS）で読み込む
         reader.readAsText(file, 'Shift_JIS');
         
         reader.onload = function(event) {
             const text = event.target.result;
-            // 改行コードで分割（WindowsのCRLFにも対応）
             const lines = text.split(/\r?\n/);
             const dataList = document.getElementById('pointNameList');
             
-            // 既存のリストをクリア
             dataList.innerHTML = '';
             let count = 0;
 
             lines.forEach(line => {
                 const cols = line.split(',');
-                // A01から始まる行（座標データ）を抽出
                 if (cols[0] === 'A01' && cols.length > 1) {
-                    const pName = cols[1].trim(); // 点名
+                    const pName = cols[1].trim(); 
                     if (pName) {
                         const option = document.createElement('option');
                         option.value = pName;
@@ -288,7 +284,7 @@
             });
 
             const simaStatus = document.getElementById('simaStatus');
-            simaStatus.innerText = `✅ 読み込み完了: ${count}点の点名を追加しました`;
+            simaStatus.innerText = `✅ 読込完了: ${count}点の点名を追加しました`;
         };
     });
 
