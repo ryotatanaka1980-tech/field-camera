@@ -3,13 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>調査士用 現場写真ツール(Proto-V3)</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="調査士カメラ">
+    
+    <title>調査士用 現場写真ツール(Proto-V4)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f5f5f7;
             margin: 0;
-            padding: 0;
+            padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0; /* ノッチ対応 */
             color: #333;
             height: 100vh;
             display: flex;
@@ -121,7 +125,6 @@
             text-overflow: ellipsis;
         }
         
-        /* エラーが起きた時に目立たせるためのクラス */
         .status.error {
             color: #d93025;
             background: #fce8e6;
@@ -148,17 +151,19 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
 
-        #downloadLink {
+        /* aタグからbuttonに変更 */
+        #downloadBtn {
             width: 100%;
             margin-top: 10px;
             display: none;
             flex-shrink: 0;
+            background: #34c759;
         }
     </style>
 </head>
 <body>
 
-<h1>調査士カメラ(Proto-V3)</h1>
+<h1>調査士カメラ(Proto-V4)</h1>
 
 <button class="btn" id="btnPermission" style="background:#5856d6; margin: 10px; position: fixed; top: 0; left: 0; z-index: 999; width: auto; display:none;">方位センサーを許可</button>
 
@@ -198,31 +203,27 @@
 
     <div class="preview-panel">
         <img id="preview" alt="文字入れプレビュー">
-        <a id="downloadLink"><button class="btn" style="background:#34c759;">💾 合成写真を保存</button></a>
+        <button class="btn" id="downloadBtn">💾 画像を保存・共有</button>
     </div>
 </div>
 
 <script>
-    // 初期値を「測位中」にして、取得前に撮影されたことをわかるようにする
     let latitude = "測位中";
     let longitude = "測位中";
     let heading = "取得中";
+    let currentCanvas = null; // 生成したCanvasを保持する変数
 
     const geoStatus = document.getElementById('geoStatus');
     const markerType = document.getElementById('markerType');
     const markerTypeCustom = document.getElementById('markerTypeCustom');
     const btnPermission = document.getElementById('btnPermission');
+    const downloadBtn = document.getElementById('downloadBtn');
 
     markerType.addEventListener('change', () => {
         markerTypeCustom.style.display = markerType.value === 'その他' ? 'block' : 'none';
     });
 
-    // --- 位置情報の取得ロジック（強化版） ---
-    const geoOptions = {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 0
-    };
+    const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
     function successLocation(position) {
         latitude = position.coords.latitude.toFixed(6);
@@ -234,8 +235,8 @@
     function errorLocation(error) {
         let errMsg = "";
         switch(error.code) {
-            case 1: errMsg = "権限拒否"; break; // ユーザーまたはiOS設定でブロックされている
-            case 2: errMsg = "電波状況悪"; break; // 室内や地下などで取得できない
+            case 1: errMsg = "権限拒否"; break;
+            case 2: errMsg = "電波状況悪"; break;
             case 3: errMsg = "タイムアウト"; break;
             default: errMsg = "不明なエラー"; break;
         }
@@ -246,9 +247,7 @@
     }
 
     if (navigator.geolocation) {
-        // 常に追従する処理
         navigator.geolocation.watchPosition(successLocation, errorLocation, geoOptions);
-        // ロード時に即座に1回取得しにいく処理
         navigator.geolocation.getCurrentPosition(successLocation, errorLocation, geoOptions);
     } else {
         latitude = "非対応";
@@ -256,7 +255,6 @@
         updateStatus();
     }
 
-    // --- 方位センサーの取得ロジック ---
     if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
         btnPermission.style.display = 'block';
         btnPermission.addEventListener('click', () => {
@@ -287,7 +285,6 @@
         geoStatus.innerText = `緯:${latitude} 経:${longitude} / ${heading}`;
     }
 
-    // --- 画像合成ロジック ---
     document.getElementById('cameraInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -298,6 +295,7 @@
             img.onload = function() {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
+                currentCanvas = canvas; // 保存用にセット
 
                 canvas.width = img.width;
                 canvas.height = img.height;
@@ -337,14 +335,41 @@
                 previewImg.src = canvas.toDataURL('image/jpeg');
                 previewImg.style.display = 'block';
 
-                const downloadLink = document.getElementById('downloadLink');
-                downloadLink.href = canvas.toDataURL('image/jpeg');
-                downloadLink.download = `${pName}_${mType}.jpg`;
-                downloadLink.style.display = 'flex';
+                downloadBtn.style.display = 'block';
             };
             img.src = event.target.result;
         };
         reader.readAsDataURL(file);
+    });
+
+    // iPhoneの共有機能（Web Share API）を使ってカメラロールに直接保存させる
+    downloadBtn.addEventListener('click', async () => {
+        if (!currentCanvas) return;
+
+        const pName = document.getElementById('pointName').value || '未入力';
+        const mType = markerType.value === 'その他' ? markerTypeCustom.value : markerType.value;
+        const fileName = `${pName}_${mType}.jpg`;
+
+        currentCanvas.toBlob(async (blob) => {
+            const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                try {
+                    await navigator.share({
+                        files: [file],
+                        title: fileName
+                    });
+                } catch (error) {
+                    console.log('シェアをキャンセル、またはエラー', error);
+                }
+            } else {
+                // PCやShare API非対応ブラウザ用フォールバック
+                const link = document.createElement('a');
+                link.download = fileName;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+            }
+        }, 'image/jpeg', 0.9);
     });
 </script>
 
