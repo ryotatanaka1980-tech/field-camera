@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>調査士用 現場写真文字入れツール</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f5f5f7;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            font-size: 1.2rem;
+            text-align: center;
+            margin-bottom: 20px;
+            color: #007aff;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
+        input[type="text"], select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            font-size: 1rem;
+        }
+        .radio-group {
+            display: flex;
+            gap: 15px;
+        }
+        .radio-group label {
+            font-weight: normal;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            background: #007aff;
+            color: #fff;
+            text-align: center;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        .btn:disabled {
+            background: #ccc;
+        }
+        .status {
+            font-size: 0.8rem;
+            color: #666;
+            background: #eee;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            white-space: pre-line;
+        }
+        #preview {
+            width: 100%;
+            margin-top: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>現場写真文字入れツール (Proto)</h1>
+    
+    <div class="status" id="geoStatus">位置情報・方位を取得中...</div>
+    <button class="btn" id="btnPermission" style="background:#5856d6; margin-bottom:15px; display:none;">方位センサーを許可する</button>
+
+    <div class="form-group">
+        <label>写真区分</label>
+        <div class="radio-group">
+            <label><input type="radio" name="photoType" value="【近景】" checked> 近景</label>
+            <label><input type="radio" name="photoType" value="【遠景】"> 遠景</label>
+        </div>
+    </div>
+
+    <div class="form-group">
+        <label for="pointName">点名</label>
+        <input type="text" id="pointName" placeholder="例：T.1, K-1">
+    </div>
+
+    <div class="form-group">
+        <label for="markerType">境界標の種類</label>
+        <select id="markerType">
+            <option value="コンクリート杭">コンクリート杭</option>
+            <option value="プラスチック杭">プラスチック杭</option>
+            <option value="金属鋲">金属鋲</option>
+            <option value="金属プレート">金属プレート</option>
+            <option value="刻み">刻み</option>
+            <option value="その他">その他（直接入力）</option>
+        </select>
+        <input type="text" id="markerTypeCustom" placeholder="標の種類を入力" style="margin-top:5px; display:none;">
+    </div>
+
+    <div class="form-group">
+        <label>写真撮影</label>
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
+        <button class="btn" onclick="document.getElementById('cameraInput').click()">📷 カメラを起動して撮影</button>
+    </div>
+
+    <img id="preview" alt="文字入れプレビュー">
+    <a id="downloadLink" style="display:none;"><button class="btn" style="background:#34c759;">💾 合成写真を保存</button></a>
+</div>
+
+<script>
+    let latitude = "取得中...";
+    let longitude = "取得中...";
+    let heading = "取得中...";
+
+    const geoStatus = document.getElementById('geoStatus');
+    const markerType = document.getElementById('markerType');
+    const markerTypeCustom = document.getElementById('markerTypeCustom');
+    const btnPermission = document.getElementById('btnPermission');
+
+    // その他を選択した時に自由入力欄を出す
+    markerType.addEventListener('change', () => {
+        markerTypeCustom.style.display = markerType.value === 'その他' ? 'block' : 'none';
+    });
+
+    // 位置情報の取得
+    if (navigator.geolocation) {
+        navigator.geolocation.watchPosition((position) => {
+            latitude = position.coords.latitude.toFixed(6);
+            longitude = position.coords.longitude.toFixed(6);
+            updateStatus();
+        }, (error) => {
+            latitude = "エラー";
+            longitude = "エラー";
+            updateStatus();
+        }, { enableHighAccuracy: true });
+    }
+
+    // iPhone用の方位センサー許可リクエスト
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        btnPermission.style.display = 'block';
+        btnPermission.addEventListener('click', () => {
+            DeviceOrientationEvent.requestPermission()
+                .then(response => {
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleOrientation, true);
+                        btnPermission.style.display = 'none';
+                    }
+                }).catch(console.error);
+        });
+    } else {
+        window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+        window.addEventListener('deviceorientation', handleOrientation, true);
+    }
+
+    function handleOrientation(event) {
+        // webkitCompassHeadingが取れればそれを使用、無ければalpha
+        let currentHeading = event.webkitCompassHeading || event.alpha;
+        if (currentHeading !== null && currentHeading !== undefined) {
+            // 方位角を度数から16方位に簡易変換
+            const directions = ['北', '北北東', '北東', '東北東', '東', '東南東', '南東', '南南東', '南', '南南西', '南西', '西南西', '西', '西北西', '北西', '北北西'];
+            let idx = Math.round(currentHeading / 22.5) % 16;
+            heading = `${Math.round(currentHeading)}° (${directions[idx]}方向)`;
+            updateStatus();
+        }
+    }
+
+    function updateStatus() {
+        geoStatus.innerText = `【現在のステータス】\n緯度: ${latitude}\n経度: ${longitude}\n方位: ${heading}`;
+    }
+
+    // 画像処理ロジック
+    document.getElementById('cameraInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // 写真のオリジナルサイズに合わせる
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+
+                // 文字入れの準備（写真サイズに応じてフォントサイズを可変に）
+                const baseSize = Math.max(canvas.width, canvas.height) * 0.025; // 写真の長辺の2.5%
+                ctx.font = `bold ${baseSize}px sans-serif`;
+
+                // 書き込み内容の構築
+                const pType = document.querySelector('input[name="photoType"]:checked').value;
+                const pName = document.getElementById('pointName').value || '未入力';
+                const mType = markerType.value === 'その他' ? markerTypeCustom.value : markerType.value;
+                
+                const textLines = [
+                    `${pType} 点名: ${pName}`,
+                    `種類: ${mType}`,
+                    `緯度: ${latitude}  経度: ${longitude}`,
+                    `方向: ${heading}`
+                ];
+
+                // テキストボックスの背景を描画（視認性確保のため）
+                const padding = baseSize * 0.5;
+                const boxWidth = baseSize * 22;
+                const boxHeight = (textLines.length * (baseSize * 1.3)) + (padding * 2);
+                const x = padding;
+                const y = canvas.height - boxHeight - padding;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // 半透明の黒
+                ctx.fillRect(x, y, boxWidth, boxHeight);
+
+                // テキストの描画
+                ctx.fillStyle = '#ffffff'; // 白文字
+                textLines.forEach((line, index) => {
+                    ctx.fillText(line, x + padding, y + padding + baseSize + (index * baseSize * 1.3));
+                });
+
+                // プレビュー表示
+                const previewImg = document.getElementById('preview');
+                previewImg.src = canvas.toDataURL('image/jpeg');
+                previewImg.style.display = 'block';
+
+                // ダウンロードリンクの設定
+                const downloadLink = document.getElementById('downloadLink');
+                downloadLink.href = canvas.toDataURL('image/jpeg');
+                downloadLink.download = `${pName}_${mType}.jpg`;
+                downloadLink.style.display = 'block';
+            };
+            img.src = event.target.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+</script>
+
+</body>
+</html>
