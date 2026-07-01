@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="調査士カメラ">
     
-    <title>調査士用 現場写真ツール(Proto-V9)</title>
+    <title>調査士用 現場写真ツール(Proto-V10)</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -88,7 +88,7 @@
             font-size: 0.8rem;
         }
         
-        input[type="text"], input[type="number"], select {
+        input[type="text"], input[type="number"], select, textarea {
             width: 100%;
             padding: 8px;
             border: 1px solid #ccc;
@@ -98,6 +98,8 @@
             height: 34px;
         }
         
+        textarea { height: auto; } /* テキストエリアは高さを可変に */
+
         .radio-group { display: flex; gap: 10px; }
         .radio-group label {
             font-weight: normal;
@@ -185,7 +187,7 @@
 </head>
 <body>
 
-<h1>調査士カメラ(Proto-V9)</h1>
+<h1>調査士カメラ(Proto-V10)</h1>
 
 <button class="btn" id="btnPermission" style="background:#5856d6; margin: 10px; position: fixed; top: 0; left: 0; z-index: 999; width: auto; display:none;">方位センサーを許可</button>
 
@@ -194,7 +196,7 @@
         <div class="form-group status" id="geoStatus">GPS/方位: 測位中...</div>
 
         <div class="sima-box">
-            <label style="margin-bottom: 5px;">📂 SIMA読込 (エラー時はコピペで)</label>
+            <label style="margin-bottom: 5px;">📂 SIMA読込</label>
             
             <div class="radio-group" style="margin-bottom: 5px;">
                 <label><input type="radio" name="simaMethod" value="file" checked> ファイル</label>
@@ -206,7 +208,7 @@
             </div>
 
             <div id="simaPasteArea" style="display:none;">
-                <textarea id="simaTextarea" rows="4" placeholder="SIMAのテキストをここにペースト" style="width:100%; border:1px solid #ccc; border-radius:4px; font-size:0.8rem; padding:4px; box-sizing:border-box;"></textarea>
+                <textarea id="simaTextarea" rows="3" placeholder="SIMAのテキストをペースト" style="width:100%; padding:4px; box-sizing:border-box;"></textarea>
                 <div style="display:flex; gap:5px; margin-top:5px;">
                     <button type="button" class="btn" id="parseSimaBtn" style="flex:2; height: 30px; font-size: 0.8rem; padding: 4px; background: #5856d6;">抽出する</button>
                     <button type="button" class="btn" id="clearSimaBtn" style="flex:1; height: 30px; font-size: 0.8rem; padding: 4px; background: #8e8e93;">クリア</button>
@@ -226,9 +228,12 @@
 
         <div class="form-group flex-row">
             <div style="flex: 2;">
-                <label for="pointName">点名</label>
-                <input type="text" id="pointName" list="pointNameList" placeholder="タップして選択">
-                <datalist id="pointNameList"></datalist>
+                <label for="pointNameSelect">点名</label>
+                <select id="pointNameSelect">
+                    <option value="">-- リスト待ち --</option>
+                    <option value="直接入力">✎ 直接入力(リストにない場合)</option>
+                </select>
+                <input type="text" id="pointNameCustom" placeholder="手入力" style="margin-top:2px; display:none;">
             </div>
             <div style="flex: 1;">
                 <label for="photoNumber">番号</label>
@@ -268,6 +273,11 @@
     const geoStatus = document.getElementById('geoStatus');
     const markerType = document.getElementById('markerType');
     const markerTypeCustom = document.getElementById('markerTypeCustom');
+    
+    // 点名の要素
+    const pointNameSelect = document.getElementById('pointNameSelect');
+    const pointNameCustom = document.getElementById('pointNameCustom');
+
     const btnPermission = document.getElementById('btnPermission');
     const downloadBtn = document.getElementById('downloadBtn');
     const photoNumberInput = document.getElementById('photoNumber');
@@ -285,12 +295,22 @@
         });
     });
 
+    // 点名の「直接入力」表示切り替え
+    pointNameSelect.addEventListener('change', () => {
+        pointNameCustom.style.display = pointNameSelect.value === '直接入力' ? 'block' : 'none';
+    });
+
+    // 境界標の「その他」表示切り替え
+    markerType.addEventListener('change', () => {
+        markerTypeCustom.style.display = markerType.value === 'その他' ? 'block' : 'none';
+    });
+
     // --- SIMAデータ 解析共通関数 ---
     function parseSimaText(text) {
         const lines = text.split(/\r?\n/);
-        const dataList = document.getElementById('pointNameList');
         
-        dataList.innerHTML = ''; // リストをリセット
+        // セレクトボックスを初期化（デフォルト項目のみ残す）
+        pointNameSelect.innerHTML = '<option value="">-- リストから選択 --</option><option value="直接入力">✎ 直接入力(手動)</option>';
         let count = 0;
 
         lines.forEach(line => {
@@ -301,14 +321,21 @@
                 if (pName) {
                     const option = document.createElement('option');
                     option.value = pName;
-                    dataList.appendChild(option);
+                    option.innerText = pName; // 表示用テキスト
+                    pointNameSelect.appendChild(option);
                     count++;
                 }
             }
         });
 
         const simaStatus = document.getElementById('simaStatus');
-        simaStatus.innerText = `✅ 読込完了: ${count}点の点名をリスト化しました`;
+        if (count > 0) {
+            simaStatus.innerText = `✅ 読込完了: ${count}点の点名を追加しました`;
+            pointNameSelect.style.backgroundColor = '#e8f4fd'; // 追加されたら色を変えてアピール
+        } else {
+            simaStatus.innerText = `⚠️ 読込失敗: A01(座標)データが見つかりません`;
+            simaStatus.style.color = '#d93025';
+        }
     }
 
     // --- ① ファイルから読み込む場合 ---
@@ -337,16 +364,14 @@
     // クリアボタン
     document.getElementById('clearSimaBtn').addEventListener('click', () => {
         document.getElementById('simaTextarea').value = '';
-        document.getElementById('pointNameList').innerHTML = '';
+        pointNameSelect.innerHTML = '<option value="">-- リスト待ち --</option><option value="直接入力">✎ 直接入力(手動)</option>';
+        pointNameSelect.style.backgroundColor = '#fff';
         document.getElementById('simaStatus').innerText = '未読み込み';
+        document.getElementById('simaStatus').style.color = '#007aff';
     });
 
 
-    // その他が選ばれたときの処理
-    markerType.addEventListener('change', () => {
-        markerTypeCustom.style.display = markerType.value === 'その他' ? 'block' : 'none';
-    });
-
+    // --- センサー系 ---
     const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
     function successLocation(position) {
@@ -409,6 +434,7 @@
         geoStatus.innerText = `緯:${latitude} 経:${longitude} / ${heading}`;
     }
 
+    // --- 画像合成処理 ---
     document.getElementById('cameraInput').addEventListener('change', function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -428,8 +454,18 @@
                 const baseSize = Math.max(canvas.width, canvas.height) * 0.025;
                 ctx.font = `bold ${baseSize}px sans-serif`;
 
+                // 写真区分の取得
                 const pType = document.querySelector('input[name="photoType"]:checked').value;
-                const pName = document.getElementById('pointName').value || '未入力';
+                
+                // 【変更点】点名の取得方法をセレクトボックスからに変更
+                let pName = pointNameSelect.value;
+                if (pName === '直接入力') {
+                    pName = pointNameCustom.value || '未入力';
+                } else if (!pName) {
+                    pName = '未入力';
+                }
+
+                // 境界標の取得
                 const mType = markerType.value === 'その他' ? markerTypeCustom.value : markerType.value;
                 
                 const textLines = [
@@ -466,10 +502,18 @@
         reader.readAsDataURL(file);
     });
 
+    // --- 保存処理 ---
     downloadBtn.addEventListener('click', async () => {
         if (!currentCanvas) return;
 
-        const pName = document.getElementById('pointName').value || '未入力';
+        // 保存ファイル名用に点名を再取得
+        let pName = pointNameSelect.value;
+        if (pName === '直接入力') {
+            pName = pointNameCustom.value || '未入力';
+        } else if (!pName) {
+            pName = '未入力';
+        }
+
         const pNum = photoNumberInput.value || '1';
         const fileName = `${pName}_${pNum}.jpg`;
 
