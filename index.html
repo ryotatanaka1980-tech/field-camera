@@ -1,47 +1,15 @@
-<script>
-    function drawSimaMap() {
-        const canvas = document.getElementById('simaViewer');
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width; canvas.height = rect.height;
-        const ctx = canvas.getContext('2d');
-        
-        if (simaPoints.length === 0) return;
-
-        // 1. 座標の範囲を求める
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-        simaPoints.forEach(p => {
-            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
-        });
-
-        // 2. 座標幅を算出（0除算防止）
-        const rangeX = (maxX - minX) || 1;
-        const rangeY = (maxY - minY) || 1;
-
-        // 3. 画面サイズに合わせて「倍率」を計算（余白を考慮）
-        const padding = 40;
-        const scaleX = (canvas.width - padding * 2) / rangeX;
-        const scaleY = (canvas.height - padding * 2) / rangeY;
-        const scale = Math.min(scaleX, scaleY) * 0.9; // 0.9倍して少し余白を作る
-
-        // 4. 中心に配置するためのオフセット計算
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-        const canvasCenterX = canvas.width / 2;
-        const canvasCenterY = canvas.height / 2;
-
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        simaPoints.forEach(p => {
-            // 座標変換：中心合わせ＆スケール適用
-            p.cx = canvasCenterX + (p.y - centerY) * scale;
-            p.cy = canvasCenterY - (p.x - centerX) * scale; // Y軸反転（測量座標系→画面）
-
-            const isSel = (p.name === selectedPointName);
-            ctx.beginPath();
-            ctx.arc(p.cx, p.cy, isSel ? 10 : 6, 0, Math.PI * 2);
-            ctx.fillStyle = isSel ? '#ff3b30' : '#007aff';
-            ctx.fill();
-        });
-    }
-</script>
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>動作確認</title>
+    <style>
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        .box { padding: 20px; border: 2px solid #007aff; border-radius: 10px; color: #007aff; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="box">正常に接続されました！次へ進めます。</div>
+</body>
+</html>
