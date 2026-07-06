@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>現場撮影ツール</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background-color: #f5f5f7; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f5f5f7; margin: 0; padding: 20px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
         .box { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 20px; }
         label { font-weight: bold; font-size: 1rem; display: block; margin-bottom: 10px; color: #333; }
         select, button { width: 100%; padding: 15px; margin-bottom: 20px; box-sizing: border-box; border-radius: 10px; border: 1px solid #ccc; font-size: 1.1rem; }
@@ -17,7 +17,7 @@
 <div class="box">
     <label>📍 点名を選択</label>
     <select id="pointNameSelect">
-        <!-- 事務所でここに点名を書き換えてGitHubに保存します -->
+        <!-- 事務所でPC作業時にここに点名を書き換えてください -->
         <option value="A12W1216-3">A12W1216-3</option>
         <option value="W12W12133-1">W12W12133-1</option>
         <option value="W12W12139-1">W12W12139-1</option>
@@ -26,9 +26,12 @@
 
     <label>📍 境界標</label>
     <select id="markerType">
-        <option value="コンクリート杭">コンクリート杭</option>
         <option value="金属鋲">金属鋲</option>
-        <option value="その他">その他</option>
+        <option value="金属標">金属標</option>
+        <option value="プラスチック杭">プラスチック杭</option>
+        <option value="コンクリート杭">コンクリート杭</option>
+        <option value="マンホール中心">マンホール中心</option>
+        <option value="刻み">刻み</option>
     </select>
 
     <button class="btn" onclick="document.getElementById('cameraInput').click()">📷 写真を撮影</button>
@@ -48,17 +51,17 @@
                 canvas.width = img.width; canvas.height = img.height;
                 ctx.drawImage(img, 0, 0);
                 
-                // 画像に情報を合成
+                // 画像への情報合成
                 ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.fillRect(50, canvas.height - 300, 800, 200);
+                ctx.fillRect(50, canvas.height - 350, 900, 250);
                 ctx.fillStyle = 'white';
-                ctx.font = 'bold 60px sans-serif';
-                ctx.fillText(`点名: ${document.getElementById('pointNameSelect').value}`, 80, canvas.height - 200);
-                ctx.fillText(`境界標: ${document.getElementById('markerType').value}`, 80, canvas.height - 120);
+                ctx.font = 'bold 70px sans-serif';
+                ctx.fillText(`点名: ${document.getElementById('pointNameSelect').value}`, 80, canvas.height - 230);
+                ctx.fillText(`境界標: ${document.getElementById('markerType').value}`, 80, canvas.height - 130);
                 
-                // ダウンロード処理
+                // 画像ダウンロードのトリガー
                 const link = document.createElement('a');
-                link.download = `${document.getElementById('pointNameSelect').value}.jpg`;
+                link.download = `${document.getElementById('pointNameSelect').value}_${document.getElementById('markerType').value}.jpg`;
                 link.href = canvas.toDataURL('image/jpeg');
                 link.click();
             };
