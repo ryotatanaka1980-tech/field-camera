@@ -3,16 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>調査士カメラ 動作確認</title>
+    <title>調査士用 現場写真ツール(V16)</title>
     <style>
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f0f8ff; }
-        .box { padding: 30px; border: 2px solid #007aff; border-radius: 15px; color: #007aff; font-weight: bold; background: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center; }
+        body { font-family: -apple-system, sans-serif; background-color: #f5f5f7; margin: 0; padding: 10px; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+        .box { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 10px; }
+        label { font-weight: bold; font-size: 0.85rem; display: block; margin-bottom: 5px; }
+        select, input, button { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ccc; }
+        .btn { background: #007aff; color: white; font-weight: bold; border: none; cursor: pointer; }
+        #simaViewer { width: 100%; height: 250px; border: 1px solid #007aff; border-radius: 8px; background: #fff; touch-action: none; display: none; }
+        .status { font-size: 0.8rem; color: #555; }
     </style>
 </head>
 <body>
-    <div class="box">
-        正常に接続されました！<br>
-        ここから開発を再開します。
-    </div>
+
+<div class="box">
+    <label>📂 SIMAファイルを読込</label>
+    <input type="file" id="simaInput" accept=".sim,.txt">
+    <div id="simaStatus" class="status">未読み込み</div>
+    <canvas id="simaViewer"></canvas>
+</div>
+
+<div class="box">
+    <label>点名選択（図面をタップ）</label>
+    <select id="pointNameSelect"><option value="">-- SIMAを読み込んでください --</option></select>
+    <label>境界標</label>
+    <select id="markerType"><option>コンクリート杭</option><option>金属鋲</option></select>
+    <button class="btn" onclick="document.getElementById('cameraInput').click()">📷 写真を撮影</button>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;">
+</div>
+
+<script>
+    let simaPoints = [];
+    let selectedPointName = "";
+
+    document.getElementById('simaInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) { parseSima(e.target.result); };
+        reader.readAsText(file, 'Shift_JIS');
+    });
+
+    function parseSima(text) {
+        simaPoints = [];
+        const lines = text.split(/\r?\n/);
+        const select = document.getElementById('pointNameSelect');
+        select.innerHTML = '<option value="">-- 選択してください --</option>';
+
+        lines.forEach(line => {
+            const cols = line.split(',');
+            if (cols[0] === 'A01' && cols.length >= 5) {
+                const pName = cols[2].trim();
+                const pX = parseFloat(cols[3]);
+                const pY = parseFloat(cols[4]);
+                simaPoints.push({ name: pName, x: pX, y: pY });
+                select.innerHTML += `<option value="${pName}">${pName}</option>`;
+            }
+        });
+        document.getElementById('simaStatus').innerText = `✅ ${simaPoints.length}点を読み込みました`;
+        document.getElementById('simaViewer').style.display = 'block';
+        drawMap();
+    }
+
+    function drawMap() {
+        const canvas = document.getElementById('simaViewer');
+        const ctx = canvas.getContext('2d');
+        const w = canvas.width = canvas.offsetWidth;
+        const h = canvas.height = canvas.offsetHeight;
+        
+        let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+        simaPoints.forEach(p => { 
+            minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); 
+            minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); 
+        });
+
+        const scale = Math.min((w-40)/(maxY-minY||1), (h-40)/(maxX-minX||1)) * 0.9;
+        const cx = w/2, cy = h/2;
+
+        ctx.clearRect(0,0,w,h);
+        simaPoints.forEach(p => {
+            const px = cx + (p.y - (minY+maxY)/2) * scale;
+            const py = cy - (p.x - (minX+maxX)/2) * scale;
+            p.cx = px; p.cy = py;
+            ctx.beginPath();
+            ctx.arc(px, py, p.name === selectedPointName ? 8 : 4, 0, Math.PI*2);
+            ctx.fillStyle = p.name === selectedPointName ? 'red' : 'blue';
+            ctx.fill();
+        });
+    }
+
+    document.getElementById('simaViewer').addEventListener('click', e => {
+        const rect = e.target.getBoundingClientRect();
+        const tx = e.clientX - rect.left, ty = e.clientY - rect.top;
+        simaPoints.forEach(p => {
+            if (Math.hypot(p.cx - tx, p.cy - ty) < 20) {
+                selectedPointName = p.name;
+                document.getElementById('pointNameSelect').value = p.name;
+                drawMap();
+            }
+        });
+    });
+</script>
 </body>
 </html>
